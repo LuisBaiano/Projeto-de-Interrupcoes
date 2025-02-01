@@ -1,4 +1,4 @@
-.program inter
+.program interruption
 .side_set 1
 
 ; Definições de tempos do protocolo WS2812
