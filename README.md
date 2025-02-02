@@ -1,8 +1,10 @@
-# Projeto de Display Numérico com Matriz LED 5x5 em Raspberry Pi Pico W
+# Projeto de Display Numérico com Matriz LED 5x5 em Raspberry Pi Pico W para estudo de interrupções
 
 **Autor: Luis Felipe Pereira de Carvalho**
 
-Este projeto faz parte das atividades do  **EMBARCATECH 2024/25** .
+**Técnico em Analises e Desenvolvimento de Sistemas - SENAI**
+
+**Graduando em Bacharelado de Computação - UEFS**
 
 ## Índice
 
