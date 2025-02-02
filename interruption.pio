@@ -1,37 +1,41 @@
 .program interruption
 .side_set 1
 
-; Definições de tempos do protocolo WS2812
+; Definições de tempos da fita led WS2812
+
 .define public T1 2
 .define public T2 5
 .define public T3 3
 
 .wrap_target
+
 bitloop:
-    out x, 1 side 0 [T3 - 1]  ; Lê 1 bit do FIFO
-    jmp !x do_zero side 1 [T1 - 1]  ; Vai para do_zero se o bit for 0
+    out x, 1 side 0 [T3 - 1]  ; Lê 1 bit do FIFO (primeiro entra, primeiro sai)
+    jmp !x do_zero side 1 [T1 - 1]  ; Vai para do_zero se o bit for igual 0 (desligado)
 do_one:
-    jmp bitloop side 1 [T2 - 1]  ; Continua o loop se o bit for 1
+    jmp bitloop side 1 [T2 - 1]  ; Continua o loop se o bit for  igual 1 (ligado)
 do_zero:
     nop side 0 [T2 - 1]  ; Faz um atraso adicional
 .wrap
 
 % c-sdk {
-static inline void inter_program_init(PIO pio, uint sm, uint offset, uint pin) {
+
+static inline void interruption_program_init(PIO pio, uint sm, uint offset, uint pin) {
     pio_gpio_init(pio, pin);
     pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
 
-    pio_sm_config c = inter_program_get_default_config(offset);
+    pio_sm_config c = interruption_program_get_default_config(offset);
     sm_config_set_sideset_pins(&c, pin);
     sm_config_set_out_shift(&c, false, true, 24);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 
     // Configuração do clock
-    float clk_div = (float)clock_get_hz(clk_sys) / (800000.0f * (inter_T1 + inter_T2 + inter_T3));
+    float clk_div = (float)clock_get_hz(clk_sys) / (800000.0f * (interruption_T1 + interruption_T2 + interruption_T3));
     sm_config_set_clkdiv(&c, clk_div);
 
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
+
 }
 %}
 

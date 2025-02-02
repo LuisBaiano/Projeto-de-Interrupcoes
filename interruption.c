@@ -1,70 +1,25 @@
-#include "hardware/pio.h"
+#include <stdio.h>
 #include "pico/stdlib.h"
-#include "hardware/gpio.h"
-
-#include "hardware/irq.h"
 #include "hardware/clocks.h"
-
+#include "hardware/pio.h"
+#include "hardware/gpio.h"
+#include "hardware/irq.h"
 #include "interruption.pio.h"
 
 // Definições de pinos
-#define LED_R_PIN     13     // Pino do LED vermelho
-#define WS2812_PIN     7     // Pino de controle da matriz 5x5
+#define LED_RED_PIN     13     // Pino do LED vermelho
+#define MATRIX_WS2812_PIN     7     // Pino de controle da matriz 5x5
 #define BUTTON_A_PIN   5     // Botão para incrementar os números (Pino GPIO 5)
 #define BUTTON_B_PIN   6     // Botão para decrementar os números (Pino GPIO 6)
 
-// Constantes de configuração
-#define DEBOUNCE_DELAY_MS 200  // Tempo de debounce implementado em milissegundos
+#define DEBOUNCE_DELAY 200 // Tempo de debounce em milissegundos
 
-// Variáveis globais voláteis
-volatile uint8_t current_number = 0;   // Número atual exibido (0-9)
-volatile bool update_numbers_display = false; // Flag para atualização do display
-volatile int button_action = 0;        // Ação do botão: 1=Incrementar, -1=Decrementar
 
-/**
- * @brief Matriz de representação numérica para display 5x5
- * @details Cada número (0-9) é representado por 25 valores binários (5x5)
- *          Valor 1 = LED ligado, 0 = LED desligado
- */
-const uint32_t number_patterns[10][25] = {
-    // Padrão para o número 0
-    {1,1,1,1,1, 1,0,0,0,1, 1,0,0,0,1, 1,0,0,0,1, 1,1,1,1,1},
-    // Padrão para o número 1
-    {1,1,1,1,1, 0,0,1,0,0, 0,0,1,0,1, 0,0,1,1,0, 0,0,1,0,0},
-    // Padrão para o número 2
-    {1,1,1,1,1, 1,0,0,0,0, 1,1,1,1,1, 0,0,0,0,1, 1,1,1,1,1},
-    // Padrão para o número 3
-    {1,1,1,1,1, 0,0,0,0,1, 0,1,1,1,1, 0,0,0,0,1, 1,1,1,1,1},
-    // Padrão para o número 4
-    {1,0,0,0,0, 0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,1, 1,0,0,0,1},
-    // Padrão para o número 5
-    {1,1,1,1,1, 0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0, 1,1,1,1,1},
-    // Padrão para o número 6
-    {1,1,1,1,1, 1,0,0,0,1, 1,1,1,1,1, 1,0,0,0,0, 1,1,1,1,1},
-    // Padrão para o número 7
-    {0,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 1,0,0,0,0, 1,1,1,1,1},
-    // Padrão para o número 8
-    {1,1,1,1,1, 1,0,0,0,1, 1,1,1,1,1, 1,0,0,0,1, 1,1,1,1,1},
-    // Padrão para o número 9
-    {1,1,1,1,1, 0,0,0,0,1, 1,1,1,1,1, 1,0,0,0,1, 1,1,1,1,1}
-};
+volatile uint8_t current_number = 0;  // Número atual exibido
+volatile bool update_num_matrix = false; // Flag utilizada para atualizar a matriz
+volatile int button_value = 0;  // 1 = Incrementar, -1 = Decrementar
 
-/**
- * @brief Atualiza a matriz de LEDs com o número especificado
- * @param number Número a ser exibido (0-9)
- * @details Envia os dados para a matriz LED WS2812 usando PIO
- */
 
-void update_led_matrix(uint8_t number) {
-    for (int i = 0; i < 25; i++) {
-        uint8_t green = number_patterns[number][i] ? 255 : 0;
-        uint8_t red = number_patterns[number][i] ? 255 : 0;
-        uint8_t blue = 0;
-        uint32_t color = (green << 16) | (red << 8) | blue;
-        pio_sm_put_blocking(pio0, 0, color);
-    }
-    sleep_us(50);  // Pequena pausa para estabilização
-}
 
 /**
  * @brief Rotina de serviço de interrupção para os botões
@@ -73,37 +28,94 @@ void update_led_matrix(uint8_t number) {
  * @details Manipula o debounce e registra a ação do botão
  */
 
-void button_interrupt(uint gpio, uint32_t events) {
-    static uint64_t last_interrupt_time = 0;
-    uint64_t current_time = time_us_64() / 1000;
+void button_interruption(uint gpio, uint32_t events) {
+    static uint64_t last_press = 0;
+    uint64_t now = time_us_64() / 1000;  
 
-    // Verificação de debounce
-    if (current_time - last_interrupt_time > DEBOUNCE_DELAY_MS) {
-        if (gpio == BUTTON_A_PIN && !gpio_get(BUTTON_A_PIN)) {
-            button_action = 1;
-            update_numbers_display = true;
-            printf("O Botão A pressionado\n");
+    if (now - last_press > DEBOUNCE_DELAY) {
+        if (gpio == BUTTON_A_PIN && gpio_get(BUTTON_A_PIN) == 0) { 
+            button_value = 1; // Incrementar
+            update_num_matrix = true;
         }
-        if (gpio == BUTTON_B_PIN && !gpio_get(BUTTON_B_PIN)) {
-            button_action = -1;
-            update_numbers_display = true;
-            printf("O Botão B pressionado\n");
+        if (gpio == BUTTON_B_PIN && gpio_get(BUTTON_B_PIN) == 0) { 
+            button_value = -1; // Decrementar
+            update_num_matrix = true;
         }
-        last_interrupt_time = current_time;
+        //Verifica qual foi o ultimo botão pressionado
+        last_press = now;
     }
+}
+
+// Defina as cores para cada número (0 a 9)
+const uint32_t number_colors[10] = {
+    0xFF0000, // 
+    0xFFFFFF, // 
+    0x00FF00, // 
+    0xFFFF00, // 
+    0xFF00FF, // 
+    0x00FFFF, // 
+    0xFFA500, // 
+    0x800080, // 
+    0x008000, // 
+    0x800000  // 
+};
+
+/**
+ * @brief Matriz de representação numérica para display 5x5
+ * @details Cada número (0-9) é representado por 25 valores binários (5x5)
+ *          Valor 1 = LED ligado, 0 = LED desligado
+ */
+
+const uint32_t numbers[10][25] = {
+    // Número 0
+    {1,1,1,1,1,  1,0,0,0,1,  1,0,0,0,1,  1,0,0,0,1,  1,1,1,1,1},
+    // Número 1
+    {1,1,1,1,1,  0,0,1,0,0,  0,0,1,0,1,  0,1,1,0,0,  0,0,1,0,0},
+    // Número 2
+    {1,1,1,1,1,  1,0,0,0,0,  1,1,1,1,1,  0,0,0,0,1,  1,1,1,1,1},
+    // Número 3
+    {1,1,1,1,1,  0,0,0,0,1,  1,1,1,1,1,  0,0,0,0,1,  1,1,1,1,1},
+    // Número 4
+    {1,0,0,0,0,  0,0,0,0,1,  1,1,1,1,1,  1,0,0,0,1,  1,0,0,0,1},
+    // Número 5
+    {1,1,1,1,1,  0,0,0,0,1,  1,1,1,1,1,  1,0,0,0,0,  1,1,1,1,1},
+    // Número 6
+    {1,1,1,1,1,  1,0,0,0,1,  1,1,1,1,1,  1,0,0,0,0,  1,1,1,1,1},
+    // Número 7
+    {0,0,0,0,1,  0,1,0,0,0,  0,0,1,0,0,  0,0,0,1,0,  1,1,1,1,1},
+    // Número 8
+    {1,1,1,1,1,  1,0,0,0,1,  1,1,1,1,1,  1,0,0,0,1,  1,1,1,1,1},
+    // Número 9
+    {1,1,1,1,1,  0,0,0,0,1,  1,1,1,1,1,  1,0,0,0,1,  1,1,1,1,1},
+};
+
+/**
+ * @brief Atualiza a matriz de LEDs com o número especificado
+ * @param number Número a ser exibido (0-9)
+ * @details Envia os dados para a matriz LED WS2812 usando PIO
+ */
+
+void update_led_matrix(int number, PIO pio, uint sm) {
+    uint32_t color = number_colors[number]; // Obtém a cor correspondente ao número
+
+    for (int i = 0; i < 25; i++) {
+        if (numbers[number][i]) {
+            pio_sm_put_blocking(pio, sm, color); // Envia a cor para o LED
+        } else {
+            pio_sm_put_blocking(pio, sm, 0); // Desliga o LED
+        }
+    }
+    sleep_us(50);
 }
 
 /**
  * @brief Função principal de inicialização e loop de controle
  */
+
 int main() {
     stdio_init_all();
 
-    // Configuração do LED embutido
-    gpio_init(LED_R_PIN);
-    gpio_set_dir(LED_R_PIN, GPIO_OUT);
-
-    // Configuração dos botões com resistores pull-up
+    // Configuração dos botões com pull-up
     gpio_init(BUTTON_A_PIN);
     gpio_set_dir(BUTTON_A_PIN, GPIO_IN);
     gpio_pull_up(BUTTON_A_PIN);
@@ -112,40 +124,39 @@ int main() {
     gpio_set_dir(BUTTON_B_PIN, GPIO_IN);
     gpio_pull_up(BUTTON_B_PIN);
 
-    // Configuração de interrupções para os botões
-    gpio_set_irq_enabled_with_callback(BUTTON_A_PIN, 
-        GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, button_interrupt);
-    gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, 
-        GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, button_interrupt);
+    // Configuração do LED vermelho
+    gpio_init(LED_RED_PIN);
+    gpio_set_dir(LED_RED_PIN, GPIO_OUT);
 
-    // Inicialização do controlador PIO para os LEDs
+    // Configuração das interrupções dos botões para os tipos FALLING e RISING
+    gpio_set_irq_enabled_with_callback(BUTTON_A_PIN, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, button_interruption);
+    gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, button_interruption);
+
+    // Inicializa o PIO para controlar os LEDs WS2812
     PIO pio = pio0;
-    uint state_machine = 0;
-    uint program_offset = pio_add_program(pio, &inter_program);
-    inter_program_init(pio, state_machine, program_offset, WS2812_PIN);
+    uint sm = 0;
+    uint offset = pio_add_program(pio, &interruption_program);
+    interruption_program_init(pio, sm, offset, MATRIX_WS2812_PIN);
 
-    // Exibição inicial do número 0
-    update_led_matrix(current_number);
+    // Exibe o número inicial na matriz
+    update_led_matrix(current_number, pio, sm);
 
-    // Loop principal de operação
+    // Loop principal
     while (true) {
-        // Piscar LED embutido (indicador de atividade)
-        gpio_put(LED_R_PIN, 1);
+        gpio_put(LED_RED_PIN, 1);
         sleep_ms(100);
-        gpio_put(LED_R_PIN, 0);
+        gpio_put(LED_RED_PIN, 0);
         sleep_ms(100);
 
         // Atualização do display se necessário
-        if (update_numbers_display) {
-            if (button_action == 1) {
+        if (update_num_matrix) {
+            if (button_value == 1) {
                 current_number = (current_number + 1) % 10;
-                printf("Número atual: %d\n", current_number);
-            } else if (button_action == -1) {
+            } else if (button_value == -1) {
                 current_number = (current_number == 0) ? 9 : current_number - 1;
-                printf("Número atual: %d\n", current_number);
             }
-            update_led_matrix(current_number);
-            update_numbers_display = false;
+            update_led_matrix(current_number,pio,sm);
+            update_num_matrix = false;
         }
     }
 }

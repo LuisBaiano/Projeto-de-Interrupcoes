@@ -20,15 +20,12 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Inicializa o SDK do Pico
 include(pico_sdk_import.cmake)
 
 project(interruption C CXX ASM)
 
-# Inicializa o SDK
 pico_sdk_init()
 
-# Adiciona o executável
 add_executable(interruption
     interruption.c
 )
@@ -40,7 +37,6 @@ pico_generate_pio_header(interruption ${CMAKE_CURRENT_LIST_DIR}/interruption.pio
 pico_set_program_name(interruption "interruption")
 pico_set_program_version(interruption "0.1")
 
-# Configura UART e USB
 pico_enable_stdio_uart(interruption 0)
 pico_enable_stdio_usb(interruption 1)
 
@@ -52,11 +48,10 @@ target_link_libraries(interruption
     hardware_gpio
 )
 
-# Inclui o diretório atual
 target_include_directories(interruption PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
 )
 
-# Adiciona saídas extras (UF2, bin, etc.)
+# Adiciona saídas extras
 pico_add_extra_outputs(interruption)
 
