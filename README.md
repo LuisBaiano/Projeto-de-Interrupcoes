@@ -4,7 +4,7 @@
 
 **Técnico em Analises e Desenvolvimento de Sistemas - SENAI**
 
-**Graduando em Bacharelado de Computação - UEFS**
+**Graduando em Bacharelado de Engenharia de Computação - UEFS**
 
 ## Índice
 
